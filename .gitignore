@@ -4,6 +4,13 @@
 # Build artifacts
 /dist
 
+# Test and coverage output
+/coverage
+/playwright-report
+/test-results
+/blob-report
+/.playwright
+
 # Local environment variables
 .env
 .env.local
@@ -27,3 +34,9 @@ pnpm-debug.log*
 # System files
 .DS_Store
 Thumbs.db
+
+# Runtime document uploads (contains PAN, GST, ITR, financial statements)
+/vault_storage
+
+# Local scratch / diagnostics
+gem_diagnosis.png

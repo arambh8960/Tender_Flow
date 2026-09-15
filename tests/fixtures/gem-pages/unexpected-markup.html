@@ -1,0 +1,18 @@
+<!--
+  Markup that does not match the expected structure: nested cards, an
+  unclosed tag, and an attribute-only anchor. The parser must degrade into
+  warnings rather than throwing.
+-->
+<div id="bidCard">
+  <div class="card">
+    <div class="card">
+      <span>GEM/2026/B/NESTED</span>
+      <p>Some text that is not laid out as expected
+    </div>
+  </div>
+
+  <div class="card">
+    <a class="bid_no_hover"></a>
+    <div class="org_name"></div>
+  </div>
+</div>

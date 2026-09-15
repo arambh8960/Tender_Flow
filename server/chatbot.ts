@@ -1,6 +1,21 @@
 import Groq from "groq-sdk";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+/**
+ * The Groq client is created on first use, not at import time.
+ *
+ * Constructing it eagerly threw when GROQ_API_KEY was absent, which took the
+ * whole process down at startup — a missing optional provider key must
+ * degrade one feature, not prevent the server from booting.
+ */
+let groqClient: Groq | null = null;
+
+function groqOrThrow(): Groq {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not configured on this deployment.');
+  }
+  if (!groqClient) groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return groqClient;
+}
 
 export async function getHelperBotResponse(query: string, context: any, history: any[]) {
   // Define the system personality and context awareness
@@ -25,7 +40,7 @@ export async function getHelperBotResponse(query: string, context: any, history:
   };
 
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await groqOrThrow().chat.completions.create({
       messages: [
         systemPrompt,
         ...history.map(m => ({

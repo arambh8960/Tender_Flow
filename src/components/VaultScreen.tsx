@@ -4,43 +4,29 @@ import {
   ShieldCheck, Upload, FileText,
   Eye, ArrowLeft, Lock, Calendar, Plus, FolderLock, Download
 } from 'lucide-react';
-
-interface VaultItem {
-  id: number;
-  cert_name: string;
-  category: 'FINANCIAL' | 'TECHNICAL' | 'LEGAL';
-  is_valid: boolean;
-  expiry_date: string;
-  file_path: string;
-}
+import { useVault } from '../hooks/useVault';
+import { describeApiError } from '../services/api/client';
 
 interface VaultScreenProps {
   onBack: () => void;
 }
 
+/**
+ * Compliance vault.
+ *
+ * Documents live in Supabase Storage under this organisation's own path
+ * prefix. Nothing in this component builds a file path: viewing or
+ * downloading asks the server for a signed URL that expires in minutes.
+ */
 export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
-  const [documents, setDocuments] = useState<VaultItem[]>([]);
+  const { documents, uploading, error, addDocument, replaceDocument, openDocument } = useVault();
 
-  React.useEffect(() => {
-    const fetchVaultData = async () => {
-      try {
-        const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-        const res = await fetch(`${API_BASE}/api/compliance-check`);
-        const data = await res.json();
-        if (data.certificates && data.certificates.length > 0) {
-          setDocuments(data.certificates);
-        }
-      } catch (err) {
-        console.error("Failed to load vault data", err);
-      }
-    };
-    fetchVaultData();
-  }, []);
 
   // --- UPLOAD MODAL STATE ---
-  const [uploadModal, setUploadModal] = useState<{ isOpen: boolean; mode: 'create' | 'edit'; docId: number | null; docName: string }>({ 
-    isOpen: false, mode: 'edit', docId: null, docName: '' 
+  const [uploadModal, setUploadModal] = useState<{ isOpen: boolean; mode: 'create' | 'edit'; docId: string | null; docName: string }>({
+    isOpen: false, mode: 'edit', docId: null, docName: ''
   });
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   // New Document Fields
   const [newDocName, setNewDocName] = useState('');
@@ -49,9 +35,9 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [expiryDate, setExpiryDate] = useState('');
   const [noExpiry, setNoExpiry] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const isUploading = uploading;
 
-  const openUpdateModal = (docId: number, docName: string) => {
+  const openUpdateModal = (docId: string, docName: string) => {
     setSelectedFile(null);
     setExpiryDate('');
     setNoExpiry(false);
@@ -68,62 +54,39 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
   };
 
   const handleConfirmUpload = async () => {
-    if (uploadModal.mode === 'create' && !newDocName.trim()) return alert("Please provide a document name.");
-    if (!selectedFile) return alert("Please select a file to upload.");
-    if (!noExpiry && !expiryDate) return alert("Please specify an expiry date or select 'No Expiry Required'.");
+    if (uploadModal.mode === 'create' && !newDocName.trim()) {
+      setUploadError('Give the document a name.');
+      return;
+    }
+    if (!selectedFile) {
+      setUploadError('Choose a file to upload.');
+      return;
+    }
+    if (!noExpiry && !expiryDate) {
+      setUploadError('Set an expiry date, or mark the document as having none.');
+      return;
+    }
 
-    setIsUploading(true);
+    setUploadError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('expiryDate', noExpiry ? 'Lifetime' : expiryDate);
-
-      const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-      let endpoint = `${API_BASE}/api/vault/upload`;
-
       if (uploadModal.mode === 'create') {
-        formData.append('certName', newDocName);
-        formData.append('category', newDocCategory);
-        endpoint = `${API_BASE}/api/vault/add-document`;
-      } else {
-        formData.append('docId', String(uploadModal.docId));
+        await addDocument({
+          file: selectedFile,
+          certName: newDocName.trim(),
+          category: newDocCategory,
+          expiryDate: noExpiry ? 'Lifetime' : expiryDate,
+        });
+      } else if (uploadModal.docId) {
+        await replaceDocument(uploadModal.docId, selectedFile, noExpiry ? 'Lifetime' : expiryDate);
       }
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        body: formData
-      });
-      
-      const data = await res.json();
-      
-      if (data.success) { 
-        if (uploadModal.mode === 'create') {
-           const newItem: VaultItem = {
-              id: data.newId || Date.now(),
-              cert_name: newDocName,
-              category: newDocCategory,
-              is_valid: true,
-              expiry_date: noExpiry ? 'Lifetime' : expiryDate,
-              file_path: data.filePath // Using the correct backend generated filename
-           };
-           setDocuments(prev => [newItem, ...prev]);
-        } else {
-           setDocuments(prev => prev.map(d => 
-             d.id === uploadModal.docId 
-               ? { ...d, is_valid: true, expiry_date: noExpiry ? 'Lifetime' : expiryDate, file_path: data.filePath } 
-               : d
-           ));
-        }
-        setUploadModal({ isOpen: false, mode: 'edit', docId: null, docName: '' });
-      } else {
-        alert("Server failed to accept file.");
-      }
+      // The hook reloads from the server instead of patching local state, so
+      // what is displayed is what was actually stored.
+      setUploadModal({ isOpen: false, mode: 'edit', docId: null, docName: '' });
+      setSelectedFile(null);
     } catch (err) {
-      console.error("Upload failed", err);
-      alert("Network error during upload.");
-    } finally {
-      setIsUploading(false);
+      setUploadError(describeApiError(err));
     }
   };
 
@@ -154,6 +117,11 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
 
       {/* CONTENT */}
       <div className="flex-grow overflow-y-auto scrollbar-hide p-8 relative">
+        {(error || uploadError) && (
+          <div className="max-w-7xl mx-auto mb-6 bg-rose-950/30 border border-rose-900/50 rounded-xl px-4 py-3">
+            <p className="text-[11px] text-rose-300">{uploadError ?? error}</p>
+          </div>
+        )}
         {documents.length === 0 ? (
            <div className="w-full max-w-2xl mx-auto mt-20 flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-800 rounded-[3rem] bg-slate-900/20 text-center">
               <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center mb-6 border border-slate-800 shadow-xl">
@@ -173,21 +141,33 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
               {documents.map((doc) => (
-                <div key={doc.id} className={`flex flex-col bg-slate-900/40 border rounded-3xl p-6 relative overflow-hidden transition-all shadow-xl ${doc.is_valid ? 'border-slate-800/80 hover:border-emerald-500/30' : 'border-red-500/30 bg-red-500/5'}`}>
+                <div key={doc.id} className={`flex flex-col bg-slate-900/40 border rounded-3xl p-6 relative overflow-hidden transition-all shadow-xl ${doc.validityStatus === 'expired' ? 'border-red-500/30 bg-red-500/5' : 'border-slate-800/80 hover:border-emerald-500/30'}`}>
                   
                   {/* Badge */}
                   <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[9px] font-black uppercase tracking-widest ${doc.category === 'FINANCIAL' ? 'bg-blue-500/20 text-blue-400' : doc.category === 'TECHNICAL' ? 'bg-purple-500/20 text-purple-400' : 'bg-slate-700 text-slate-300'}`}>
-                    {doc.category}
+                    {doc.category ?? 'UNCATEGORISED'}
                   </div>
 
                   <div className="flex items-start gap-4 mb-6 mt-2">
-                      <div className={`p-3 rounded-xl shrink-0 ${doc.is_valid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                          {doc.is_valid ? <ShieldCheck className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                      <div className={`p-3 rounded-xl shrink-0 ${doc.validityStatus === 'expired' ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                          {doc.validityStatus === 'expired' ? <FileText className="w-6 h-6" /> : <ShieldCheck className="w-6 h-6" />}
                       </div>
                       <div>
                           <h3 className="text-sm font-bold text-white leading-tight pr-4">{doc.cert_name}</h3>
-                          <p className={`text-[10px] font-black uppercase tracking-widest mt-1.5 ${doc.is_valid ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {doc.is_valid ? 'Verified Active' : 'Expired'}
+                          <p className={`text-[10px] font-black uppercase tracking-widest mt-1.5 ${
+                            doc.validityStatus === 'expired'
+                              ? 'text-red-400'
+                              : doc.validityStatus === 'expiring_soon'
+                                ? 'text-amber-400'
+                                : 'text-emerald-400'
+                          }`}>
+                              {doc.validityStatus === 'expired'
+                                ? 'Expired'
+                                : doc.validityStatus === 'expiring_soon'
+                                  ? 'Expiring soon'
+                                  : doc.validityStatus === 'unknown'
+                                    ? 'No expiry recorded'
+                                    : 'Valid'}
                           </p>
                       </div>
                   </div>
@@ -195,29 +175,25 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
                   <div className="mt-auto space-y-4">
                       <div className="flex justify-between items-center text-[10px] font-bold uppercase text-slate-500 bg-slate-950/50 p-2.5 rounded-lg border border-slate-800/50">
                           <span>Expiry Date</span>
-                          <span className={doc.expiry_date === 'Expired' ? 'text-red-400' : 'text-slate-300'}>{doc.expiry_date}</span>
+                          <span className={doc.validityStatus === 'expired' ? 'text-red-400' : 'text-slate-300'}>
+                            {doc.expiry_date ? new Date(doc.expiry_date).toLocaleDateString('en-GB') : 'Not recorded'}
+                          </span>
                       </div>
 
                       {/* --- THE NEW ACTION BAR (VIEW, DOWNLOAD, UPDATE) --- */}
                       <div className="flex gap-2">
-                          {doc.is_valid && (
+                          {doc.hasFile && (
                               <>
-                                <button 
-                                  onClick={() => {
-                                      const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-                                      window.open(`${API_BASE}/api/vault/view/${doc.file_path}`, '_blank');
-                                  }}
+                                <button
+                                  onClick={() => void openDocument(doc.id)}
                                   className="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
                                   title="Preview Document"
                                 >
                                     <Eye className="w-3 h-3" /> View
                                 </button>
                                 
-                                <button 
-                                  onClick={() => {
-                                      const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-                                      window.open(`${API_BASE}/api/vault/download/${doc.file_path}`, '_self');
-                                  }}
+                                <button
+                                  onClick={() => void openDocument(doc.id, true)}
                                   className="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
                                   title="Download to PC"
                                 >
@@ -228,17 +204,17 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({ onBack }) => {
                           <button 
                               onClick={() => openUpdateModal(doc.id, doc.cert_name)}
                               className={`flex-1 py-2.5 flex items-center justify-center gap-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                                  doc.is_valid 
-                                      ? 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-blue-400 hover:border-blue-500/50' 
+                                  doc.hasFile
+                                      ? 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-blue-400 hover:border-blue-500/50'
                                       : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
                                   }`}
                           >
-                              <Upload className="w-3 h-3" /> {doc.is_valid ? 'Update' : 'Upload Now'}
+                              <Upload className="w-3 h-3" /> {doc.hasFile ? 'Update' : 'Upload Now'}
                           </button>
                       </div>
                   </div>
 
-                  {!doc.is_valid && (
+                  {doc.validityStatus === 'expired' && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500/50 to-red-900/50 animate-pulse" />
                   )}
                 </div>

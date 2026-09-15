@@ -2,7 +2,22 @@
 import Groq from "groq-sdk";
 import { extractJsonFromText } from "./utils/extractJson";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+/**
+ * The Groq client is created on first use, not at import time.
+ *
+ * Constructing it eagerly threw when GROQ_API_KEY was absent, which took the
+ * whole process down at startup — a missing optional provider key must
+ * degrade one feature, not prevent the server from booting.
+ */
+let groqClient: Groq | null = null;
+
+function groqOrThrow(): Groq {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is not configured on this deployment.');
+  }
+  if (!groqClient) groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return groqClient;
+}
 
 export function extractATCSlice(fullText: string): string {
   const normalizedText = fullText.replace(/\s+/g, ' '); 
@@ -81,7 +96,7 @@ const prompt = `You are a Senior Legal and Technical Compliance Officer analyzin
   `;
 
   try {
-    const response = await groq.chat.completions.create({
+    const response = await groqOrThrow().chat.completions.create({
       messages: [{ role: "user", content: prompt }],
       model: "llama-3.3-70b-versatile",
       temperature: 0.1

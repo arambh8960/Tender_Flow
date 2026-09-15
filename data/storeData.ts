@@ -11,7 +11,7 @@ export const productInventory: SKU[] = [
     specification: { "Material": "Aluminium", "Insulation": "PVC", "Conductor": "Rigid", "Standard": "IS 694" },
     availableQuantity: 45000, 
     warehouseLocation: "Jalandhar, PB", warehouseCode: "JAL-01", warehouseLat: 31.3260, warehouseLon: 75.5762,
-    truckType: 'Trailer', leadTime: 7, costPrice: 115, unitSalesPrice: 160, bulkSalesPrice: 145,
+    truckType: 'HEAVY_TRUCK', leadTime: 7, costPrice: 115, unitSalesPrice: 160, bulkSalesPrice: 145,
     gstRate: 18, brokerage: 2.0, minMarginPercent: 15, isActive: true, isCustomMadePossible: true, isComplianceReady: true,
   },
   {
@@ -23,7 +23,7 @@ export const productInventory: SKU[] = [
     specification: { "Material": "Copper", "Insulation": "PVC", "Conductor": "Rigid", "Standard": "IS 694", "Variant": "V2" },
     availableQuantity: 15000, 
     warehouseLocation: "Jalandhar, PB", warehouseCode: "JAL-01", warehouseLat: 31.3260, warehouseLon: 75.5762,
-    truckType: 'Trailer', leadTime: 5, costPrice: 280, unitSalesPrice: 410, bulkSalesPrice: 375,
+    truckType: 'HEAVY_TRUCK', leadTime: 5, costPrice: 280, unitSalesPrice: 410, bulkSalesPrice: 375,
     gstRate: 18, brokerage: 2.0, minMarginPercent: 18, isActive: true, isCustomMadePossible: true, isComplianceReady: true,
   },
   {
@@ -95,7 +95,7 @@ export const productInventory: SKU[] = [
     specification: { "Insulation": "XLPE", "Voltage": "3.3 kV to 33 kV", "Standard": "IS 7098 (Part 2)", "Quality": "Q3" },
     availableQuantity: 850, 
     warehouseLocation: "Jalandhar, PB", warehouseCode: "JAL-01", warehouseLat: 31.3260, warehouseLon: 75.5762,
-    truckType: 'Trailer', leadTime: 10, costPrice: 2800, unitSalesPrice: 3500, bulkSalesPrice: 3200,
+    truckType: 'HEAVY_TRUCK', leadTime: 10, costPrice: 2800, unitSalesPrice: 3500, bulkSalesPrice: 3200,
     gstRate: 18, brokerage: 2.0, minMarginPercent: 15, isActive: true, isCustomMadePossible: true, isComplianceReady: true,
   },
   {
@@ -988,7 +988,7 @@ export const productInventory: SKU[] = [
   warehouseCode: "KNP-01", 
   warehouseLat: 26.4499, 
   warehouseLon: 80.3319,
-  truckType: 'Trailer', 
+  truckType: 'HEAVY_TRUCK', 
   leadTime: 30,
   costPrice: 12500, 
   unitSalesPrice: 15000, 

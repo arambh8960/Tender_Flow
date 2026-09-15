@@ -1,0 +1,29 @@
+<!--
+  Cards with fields the parser cannot read. Each omission must surface as an
+  empty value plus a parse warning — never as a substituted default.
+-->
+<div id="bidCard">
+  <!-- No organisation element at all. -->
+  <div class="card">
+    <a class="bid_no_hover" href="/showbidDocument/770001">GEM/2026/B/NOORG</a>
+    <div class="consignee_location">Nagpur, Maharashtra</div>
+    <span class="end_date">End Date: 20-10-2026</span>
+    <p>Items: Copper Earthing Strip Quantity: 200 EMD: No</p>
+  </div>
+
+  <!-- No item text. -->
+  <div class="card">
+    <a class="bid_no_hover" href="/showbidDocument/770002">GEM/2026/B/NOITEMS</a>
+    <div class="org_name">Public Health Department</div>
+    <div class="consignee_location">Jaipur, Rajasthan</div>
+    <span class="end_date">End Date: 22-10-2026</span>
+  </div>
+
+  <!-- No end date. -->
+  <div class="card">
+    <a class="bid_no_hover" href="/showbidDocument/770003">GEM/2026/B/NODATE</a>
+    <div class="org_name">Municipal Corporation</div>
+    <div class="consignee_location">Indore, Madhya Pradesh</div>
+    <p>Items: LED Street Light 90W Quantity: 800 EMD: Yes</p>
+  </div>
+</div>

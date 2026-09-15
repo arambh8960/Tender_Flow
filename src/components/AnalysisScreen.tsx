@@ -8,6 +8,9 @@ import {
   FileCog, Download, CheckCircle2, RefreshCw, 
   MapPin, Scale, Eye,
 } from 'lucide-react';
+import { rfpApi } from '../services/api';
+import { useVault } from '../hooks/useVault';
+import { useOrganization } from '../contexts/OrganizationContext';
 
 interface AnalysisScreenProps {
   rfp: Rfp;
@@ -109,21 +112,13 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ rfp, config, onB
 
   const [blankDocs, setBlankDocs] = useState<BlankDoc[]>(initialBlankDocs);
 
-  // Fetch real vault docs
+  // Vault documents for the active organisation, with signed-URL access.
+  const { documents: vaultDocuments, openDocument } = useVault();
+  const { activeOrganization } = useOrganization();
+  const organizationId = activeOrganization?.id ?? null;
+
   useEffect(() => {
-    const fetchVaultData = async () => {
-      try {
-        const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-        const response = await fetch(`${API_BASE}/api/compliance-check`);
-        const data = await response.json();
-        if (data.certificates) {
-          setDocuments(data.certificates);
-        }
-      } catch (error) {
-        console.error("Error fetching vault for analysis:", error);
-      }
-    };
-    fetchVaultData();
+    setDocuments(vaultDocuments);
   }, []);
 
   useEffect(() => {
@@ -343,19 +338,11 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ rfp, config, onB
     setBlankDocs(prev => prev.map(d => d.id === docId ? { ...d, status: 'CONVERTING' } : d));
 
     try {
-      const res = await fetch('http://localhost:3001/api/convert-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, fileName: name })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBlankDocs(prev => prev.map(d => 
-          d.id === docId ? { ...d, status: 'CONVERTED_TO_DOCX', docxUrl: data.docxUrl } : d
-        ));
-      } else {
-        setBlankDocs(prev => prev.map(d => d.id === docId ? { ...d, status: 'DETECTED' } : d));
-      }
+      if (!organizationId) throw new Error('No active organisation');
+      const data = await rfpApi.convertPdf(organizationId, url, name);
+      setBlankDocs(prev => prev.map(d =>
+        d.id === docId ? { ...d, status: 'CONVERTED_TO_DOCX', docxUrl: data.docxUrl } : d
+      ));
     } catch (err) {
       setBlankDocs(prev => prev.map(d => d.id === docId ? { ...d, status: 'DETECTED' } : d));
     }
@@ -600,10 +587,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ rfp, config, onB
                   </p>
                   
                   <button 
-                    onClick={() => {
-                      const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-                      window.open(`${API_BASE}/api/vault/view/${miiDoc.file_path}`, '_blank');
-                    }}
+                    onClick={() => void openDocument(miiDoc.id)}
                     className="mt-3 flex items-center gap-2 text-[10px] font-black text-emerald-500 hover:text-white transition-colors group"
                   >
                     <Eye className="w-3 h-3 group-hover:scale-110 transition-transform" />
@@ -650,11 +634,8 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ rfp, config, onB
 
                     <div className="flex items-center gap-2">
                         {inVault && (
-                            <button 
-                                onClick={() => {
-                                    const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-                                    window.open(`${API_BASE}/api/vault/view/${matchedVaultDoc.file_path}`, '_blank');
-                                }}
+                            <button
+                                onClick={() => void openDocument(matchedVaultDoc.id)}
                                 className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-500 transition-all group"
                                 title="View Document"
                             >
@@ -720,13 +701,15 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ rfp, config, onB
                   <div className="flex gap-3 mt-1">
                      <button 
                         onClick={() => {
-                          let targetUrl = doc.url;
-                          // Intercept AI hallucinated URLs and reroute to the main RFP document
-                          if (targetUrl.includes('example.com') || targetUrl.includes('dummy')) {
-                             const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-                             targetUrl = `${API_BASE}/api/vault/view/${parsedMetadata.bidNumber || rfp.id}.pdf`;
+                          const targetUrl = doc.url;
+                          // A placeholder URL means extraction did not find a
+                          // real document; opening something else in its place
+                          // would present an unrelated file as the source.
+                          if (!targetUrl || targetUrl.includes('example.com') || targetUrl.includes('dummy')) {
+                            window.alert('No source document was extracted for this item.');
+                            return;
                           }
-                          window.open(targetUrl, '_blank');
+                          window.open(targetUrl, '_blank', 'noopener,noreferrer');
                         }}
                         className="flex-1 py-3 bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2"
                      >

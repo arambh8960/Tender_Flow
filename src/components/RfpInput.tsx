@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { useState, useCallback } from 'react';
-import { rfpDoc_CPWD_Exterior } from '../../data/rfpData';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { rfpApi } from '../services/api';
+import { useOrganization } from '../contexts/OrganizationContext';
+import { describeApiError } from '../services/api/client';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -23,6 +25,8 @@ export const RfpInput: React.FC<RfpInputProps> = ({ onSubmit }) => {
     const [isDragOver, setIsDragOver] = useState(false);
     const [ingestionProgress, setIngestionProgress] = useState<IngestionProgress>({ status: 'idle', steps: [] });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const { activeOrganization } = useOrganization();
+    const organizationId = activeOrganization?.id ?? null;
 
     const extractTextFromPdf = async (file: File): Promise<string> => {
         const arrayBuffer = await file.arrayBuffer();
@@ -45,8 +49,14 @@ export const RfpInput: React.FC<RfpInputProps> = ({ onSubmit }) => {
                 setIngestionProgress(prev => ({...prev, steps: [...prev.steps, { message: 'Digital PDF detected', icon: '📄' }]}));
                 content = await extractTextFromPdf(file);
                 if (content.trim().length < 100) {
-                    setIngestionProgress(prev => ({...prev, steps: [...prev.steps, { message: 'Using mock data buffer...', icon: '⚠' }]}));
-                    content = rfpDoc_CPWD_Exterior;
+                    // Substituting a bundled sample here would analyse a
+                    // document the user never uploaded and present the result
+                    // as theirs. A scanned PDF needs OCR, not a stand-in.
+                    setIngestionProgress({
+                        status: 'error',
+                        steps: [{ message: 'No readable text found — this looks like a scanned PDF. Upload a text-based PDF.', icon: '✖' }],
+                    });
+                    return;
                 }
             } else {
                 content = await file.text();
@@ -82,16 +92,14 @@ export const RfpInput: React.FC<RfpInputProps> = ({ onSubmit }) => {
         if (!url) return;
         setIngestionProgress({ status: 'processing', steps: [{ message: 'Proxying through Master Backend...', icon: '🔗' }] });
         try {
-            const res = await fetch('http://localhost:3001/api/fetch-rfp-url', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            });
-            const data = await res.json();
+            if (!organizationId) throw new Error('No active organisation.');
+            const data = await rfpApi.fetchFromUrl(organizationId, url);
             onSubmit({ source: 'URL', content: data.content, fileName: url });
             setIngestionProgress({ status: 'idle', steps: [] });
         } catch (e) {
-            setIngestionProgress({ status: 'error', steps: [{ message: 'Network Failure: GeM Proxy Timed Out', icon: '✖' }] });
+            // The real reason matters here: a blocked URL and a timeout call
+            // for different actions from the user.
+            setIngestionProgress({ status: 'error', steps: [{ message: describeApiError(e), icon: '✖' }] });
         }
     };
     const renderFileContent = () => {

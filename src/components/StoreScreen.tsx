@@ -66,12 +66,15 @@ export const StoreScreen: React.FC<StoreScreenProps> = ({ inventory, setInventor
       const lines = text.split('\n').filter(l => l.trim() !== '');
       if (lines.length < 2) return alert("Invalid CSV format. Need headers and data.");
 
-      const newSkus: SKU[] = lines.slice(1).map(line => {
+      // Row index makes a generated code unique within the batch; a random
+      // 3-digit suffix could collide and silently merge two imported rows.
+      const importedAt = Date.now();
+      const newSkus: SKU[] = lines.slice(1).map((line, rowIndex) => {
         const values = line.split(',').map(v => v.trim());
         const price = parseFloat(values[4]) || 0;
         
         return {
-          skuId: values[0] || `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          skuId: values[0] || `SKU-${importedAt}-${rowIndex + 1}`,
           productName: values[1] || 'Imported Product',
           productCategory: values[2] || 'Imported Category',
           productSubCategory: 'General',

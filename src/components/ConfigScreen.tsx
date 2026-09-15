@@ -2,6 +2,9 @@ import * as React from 'react';
 import { useState, useMemo } from 'react';
 import { ShieldCheck, LogOut, KeyRound, Factory, TrendingUp, Award } from 'lucide-react';
 import { AppConfig, CompanyConfig, SigningAuthority, SKU } from '../../types';
+import { organizationApi } from '../services/api';
+import { describeApiError } from '../services/api/client';
+import { useOrganization } from '../contexts/OrganizationContext';
 
 interface ConfigScreenProps {
   config: AppConfig;
@@ -22,6 +25,10 @@ export const ConfigScreen: React.FC<ConfigScreenProps> = ({
 }) => {
   const [companyDetails, setCompanyDetails] = useState<CompanyConfig>(config.companyDetails);
   const [isAddingAuthority, setIsAddingAuthority] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const { activeOrganization } = useOrganization();
+  const organizationId = activeOrganization?.id ?? null;
   const [newAuth, setNewAuth] = useState({ name: '', designation: '', din: '' });
 
   // --- LIVE ASSET CALCULATIONS (Bulletproof Fallback) ---
@@ -43,24 +50,32 @@ export const ConfigScreen: React.FC<ConfigScreenProps> = ({
     setCompanyDetails(prev => ({ ...prev, [name]: value }));
   };
 
+  /**
+   * Saves the company profile.
+   *
+   * Authorisation is the caller's role in this organisation, checked by the
+   * server. The shared admin password that used to gate this is gone: it was
+   * the same for every deployment and sat in the repository.
+   */
   const handleSave = async () => {
-    setConfig(prev => ({ ...prev, companyDetails }));
+    if (!organizationId) return;
+    setSaving(true);
+    setSaveMessage(null);
     try {
-      const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-      const res = await fetch(`${API_BASE}/api/update-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'TF-Admin-2026', companyDetails })
+      await organizationApi.updateProfile(organizationId, {
+        address: companyDetails.companyAddress,
+        gstin: companyDetails.gstin,
+        pan: companyDetails.pan,
+        domain: companyDetails.domain,
+        turnoverYear: companyDetails.turnoverYear,
+        oemStatus: companyDetails.oemStatus,
+        ...(companyDetails.turnover ? { annualTurnoverCr: Number(companyDetails.turnover) } : {}),
       });
-      const data = await res.json();
-      if (data.success) {
-        alert('System Configuration Synced to PostgreSQL Database ✅');
-      } else {
-        alert('Failed to sync to DB');
-      }
+      setSaveMessage('Company profile saved.');
     } catch (err) {
-      console.error(err);
-      alert('Network error while saving configuration. State updated locally.');
+      setSaveMessage(describeApiError(err));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -94,12 +109,17 @@ export const ConfigScreen: React.FC<ConfigScreenProps> = ({
             <ShieldCheck className="w-4 h-4" />
             Manage Vault
           </button>
-          <button 
-            onClick={handleSave}
-            className="bg-white text-slate-950 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:scale-105"
-          >
-            Push Changes
-          </button>
+          <div className="flex flex-col items-end gap-1.5">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-white text-slate-950 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
+            >
+              {saving ? 'Saving…' : 'Push Changes'}
+            </button>
+            {/* The outcome is shown in place rather than in an alert box. */}
+            {saveMessage && <span className="text-[10px] text-slate-400">{saveMessage}</span>}
+          </div>
         </div>
       </div>
 

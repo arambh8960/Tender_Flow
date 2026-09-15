@@ -1,0 +1,46 @@
+# Backend deployment (Render).
+#
+# The API needs a real Chromium for GeM discovery, which is why this uses a
+# Docker service rather than Render's Node runtime: the native runtime has no
+# system browser and Puppeteer's bundled download is not reliably present.
+services:
+  - type: web
+    name: tenderflow-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: singapore
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: PUPPETEER_HEADLESS
+        value: "true"
+      # Matches the Chromium installed in the Dockerfile.
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium
+      - key: PUPPETEER_NAV_TIMEOUT_MS
+        value: "30000"
+
+      # Set in the Render dashboard, never in this file.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CONVERT_API_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false

@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+!.env.example
+vault_storage
+playwright-report
+test-results
+tests/e2e
+docs
+*.log

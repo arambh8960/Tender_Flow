@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { Rfp, LogEntry,AppConfig,VaultItem } from '../../types';
+import { useOrganization } from '../contexts/OrganizationContext';
 import { TrendingUp, TrendingDown, Activity, Cpu, ShieldCheck, Database, Factory, Award } from 'lucide-react';
+import { aiApi, organizationApi } from '../services/api';
 
 interface ProcessingScreenProps {
   rfp: Rfp;
@@ -20,6 +22,8 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
   const [insightIndex, setInsightIndex] = useState(0);
   const [isSnapshotOpen, setIsSnapshotOpen] = useState(false);
   const [vaultDocs, setVaultDocs] = useState<VaultItem[]>([]);
+  const { activeOrganization } = useOrganization();
+  const organizationId = activeOrganization?.id ?? null;
   // LIVE AI MARKET DATA (Unified Payload)
   const [liveInsights, setLiveInsights] = useState<string[]>(["Establishing secure uplink to market intelligence..."]);
   const [commodities, setCommodities] = useState<any[]>([
@@ -39,11 +43,9 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
   useEffect(() => {
     const fetchLiveIntelligence = async () => {
       try {
-        const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-        const res = await fetch(`${API_BASE}/api/market-insights`);
-        const json = await res.json();
-        
-        if (json.success && json.data) {
+        const json = await aiApi.marketInsights();
+
+        if (json.data) {
           if (json.data.insights && json.data.insights.length > 0) {
             setLiveInsights(json.data.insights);
           }
@@ -62,14 +64,11 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
   useEffect(() => {
     const fetchVault = async () => {
       try {
-        const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3001' : '';
-        const res = await fetch(`${API_BASE}/api/compliance-check`);
-        const data = await res.json();
-        if (data.certificates) {
-          setVaultDocs(data.certificates);
-        }
+        if (!organizationId) return;
+        const data = await organizationApi.getComplianceSnapshot(organizationId);
+        setVaultDocs(data.certificates);
       } catch (err) {
-        console.error("Vault fetch failed", err);
+        console.error('Vault fetch failed', err);
       }
     };
     fetchVault();

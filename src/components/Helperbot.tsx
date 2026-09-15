@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Rfp } from '../../types';
 import botIcon from '../assets/chatbot1.png';
+import { aiApi } from '../services/api';
 
 interface Message {
   sender: 'user' | 'bot';
@@ -43,22 +44,16 @@ export const HelperBot: React.FC<HelperBotProps> = ({ currentRfp }) => {
 
     try {
       // Send History + Current RFP Context to Backend
-      const response = await fetch('http://localhost:3001/api/copilot-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: userMsg.text,
-          context: currentRfp ? {
-            id: currentRfp.id,
-            org: currentRfp.organisation,
-            parsedData: currentRfp.agentOutputs?.parsedData,
-            financials: currentRfp.agentOutputs?.pricing
-          } : null,
-          history: messages.slice(1).map(m => ({ role: m.sender, content: m.text }))
-        }),
-      });
-
-      const data = await response.json();
+      const data = await aiApi.copilot(
+        userMsg.text,
+        currentRfp ? {
+          id: currentRfp.id,
+          org: currentRfp.organisation,
+          parsedData: currentRfp.agentOutputs?.parsedData,
+          financials: currentRfp.agentOutputs?.pricing
+        } : null,
+        messages.slice(1).map(m => ({ role: m.sender, content: m.text }))
+      );
       
       const botMsg: Message = { 
         sender: 'bot', 
